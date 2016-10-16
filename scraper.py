@@ -14,9 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+The Crimson Careers Scraper is a tool for scraping Harvard's Career website.
+
+Usage:
+>>> from scraper import CrimsonScraper
+>>> cc = CrimsonScraper(my_email, my_huid)
+>>>
+>>> cc.run(letter='E') # scrape last names starting with 'E', store results in 'E.csv'
+>>> cc.run(first='B', last='W') # scrape last names starting with 'B' to names starting with 'W'
+"""
+
 import sys
 import time
 import pandas as pd
+from os import listdir
 from collections import defaultdict as ddict
 
 # import selenium libraries
@@ -66,7 +78,7 @@ class CrimsonScraper(object):
             return False
         return True
 
-    def get_contactInfo(self, elements, d, letter):
+    def get_info(self, elements, d, letter):
         # get num elements
         count = len(elements) + 1
 
@@ -110,20 +122,46 @@ class CrimsonScraper(object):
             self.contacts[letter]['Email'].append(tmp_email)
             self.contacts[letter]['Phone'].append(tmp_phone)
 
+    def csv_version(self):
+        # default csv file name
+        default = "contacts"
+
+        # search current directory for .csv files to find current version
+        files = listdir('./')
+        max_v = 0
+        for file in filter(lambda f: '.csv' in f, files):
+            print file
+            # get name of file minus .csv
+            file_name = file[0:-4]
+            try:
+                # get last version of csv
+                version = int(file_name[-1])
+                max_v = max(max_v, version)
+            except ValueError:
+                # last character not an integer -> no version yet
+                pass
+        if max_v != 0:
+            # update default if max version >= 1
+            default = 'contacts-%d' % (max_v + 1)
+        return default
+
     def export_csv(self, letter=None):
-        # save results of contacts dict to pandas df
+
+        # create empty pandas df to store results
         df = pd.DataFrame()
 
         if not letter:
+            # get csv file version
+            filename = self.csv_version() + '.csv'
+
             # loop through all letters and merge into dataframe
             for key in self.contacts.keys():
                 df = df.append(pd.DataFrame(self.contacts[key]))
-
             # save df to file
             print df.head()
             print '\n'
-            print 'saving results to contacts.csv'
-            df.to_csv('contacts.csv')
+            print 'saving results to %s' % filename
+            df.to_csv(filename, columns=['Company','Name','Email','Phone'])
         else:
             df = df.append(pd.DataFrame(self.contacts[letter]))
             print df.head()
@@ -147,7 +185,7 @@ class CrimsonScraper(object):
                     print 'no elements found on this page\n'; return
 
                 # extract contact info and store in self.contacts
-                self.get_contactInfo(n, d, letter)
+                self.get_info(n, d, letter)
 
                 # navigate to next page
                 try:
@@ -189,10 +227,10 @@ class CrimsonScraper(object):
 
             self.export_csv(letter)
         else:
-            # login and scrape first letter
+            # login
             self.login(d, letter=first)
 
-            # search B-Z
+            # search first-last
             for i in xrange(ord(first), ord(last)+1):
                 # convert int to letter
                 letter = chr(i)
@@ -208,5 +246,6 @@ class CrimsonScraper(object):
 
         # save and exit gracefully
         d.quit()
+        print "finished!"
         return
 
